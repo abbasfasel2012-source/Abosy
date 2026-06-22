@@ -1,17 +1,20 @@
 import { useEffect, useCallback, useRef } from 'react'
-import { Platform, FlatList, KeyboardAvoidingView } from 'react-native'
 import {
-  YStack,
-  XStack,
-  Text,
-  Button,
-} from '@blinkdotnew/mobile-ui'
+  View, Text, FlatList, KeyboardAvoidingView, Platform,
+  TouchableOpacity, StyleSheet, StatusBar,
+} from 'react-native'
 import { LinearGradient } from 'expo-linear-gradient'
+import { BlurView } from 'expo-blur'
 import { useRouter } from 'expo-router'
-import { useQuery, useQueryClient } from '@tanstack/react-query'
+import { useQuery } from '@tanstack/react-query'
 import { blink } from '@/lib/blink'
 import { useChatStore } from '@/stores/chatStore'
-import { generateStreamingResponse, isImageGenerationRequest, extractImagePrompt, generateImage } from '@/lib/ai'
+import {
+  generateStreamingResponse,
+  isImageGenerationRequest,
+  extractImagePrompt,
+  generateImage,
+} from '@/lib/ai'
 import { ChatMessage } from '@/components/ChatMessage'
 import { ChatInput } from '@/components/ChatInput'
 import { ModelSelector } from '@/components/ModelSelector'
@@ -24,7 +27,6 @@ function generateId(): string {
 
 export default function ChatScreen() {
   const router = useRouter()
-  const queryClient = useQueryClient()
   const flatListRef = useRef<FlatList>(null)
 
   const conversations = useChatStore((s) => s.conversations)
@@ -64,7 +66,7 @@ export default function ChatScreen() {
     }
   }, [dbConversations])
 
-  const { data: dbMessages, refetch: refetchMessages } = useQuery({
+  const { data: dbMessages } = useQuery({
     queryKey: ['messages', activeConversationId],
     queryFn: async () => {
       if (!activeConversationId) return []
@@ -79,15 +81,11 @@ export default function ChatScreen() {
   })
 
   useEffect(() => {
-    if (dbMessages) {
-      setMessages(dbMessages)
-    }
+    if (dbMessages) setMessages(dbMessages)
   }, [dbMessages])
 
   const scrollToBottom = useCallback(() => {
-    setTimeout(() => {
-      flatListRef.current?.scrollToEnd({ animated: true })
-    }, 100)
+    setTimeout(() => flatListRef.current?.scrollToEnd({ animated: true }), 100)
   }, [])
 
   const handleNewChat = useCallback(async () => {
@@ -106,7 +104,6 @@ export default function ChatScreen() {
   const handleSend = useCallback(
     async (text: string, fileUrl?: string, fileName?: string, fileType?: string) => {
       setError(null)
-
       let convId = activeConversationId
 
       if (!convId) {
@@ -118,8 +115,7 @@ export default function ChatScreen() {
           await refetchConversations()
           convId = newConv.id
           setActiveConversation(convId)
-        } catch (err) {
-          console.error('Error creating conversation:', err)
+        } catch {
           setError('خطأ في إنشاء المحادثة')
           return
         }
@@ -150,34 +146,22 @@ export default function ChatScreen() {
           file_name: fileName || null,
           file_type: fileType || null,
         })
-
-        if (messages.length === 0 && activeConversationId) {
-          await blink.db.conversations.update(convId, {
-            title: text.slice(0, 50),
-            updated_at: new Date().toISOString(),
-          })
-        } else {
-          await blink.db.conversations.update(convId, {
-            updated_at: new Date().toISOString(),
-          })
-        }
-
+        await blink.db.conversations.update(convId, {
+          title: messages.length === 0 ? text.slice(0, 50) : undefined,
+          updated_at: new Date().toISOString(),
+        })
         await refetchConversations()
-      } catch (err) {
-        console.error('Error saving user message:', err)
-      }
+      } catch {}
 
       setLoading(true)
       scrollToBottom()
 
       const aiMsgId = generateId()
 
-      // طلب توليد صورة بالذكاء الاصطناعي
       if (isImageGenerationRequest(text)) {
         try {
           const imagePrompt = extractImagePrompt(text)
           const imageUrl = await generateImage(imagePrompt)
-
           const aiMsg: Message = {
             id: aiMsgId,
             conversation_id: convId,
@@ -189,26 +173,15 @@ export default function ChatScreen() {
             file_type: 'image/generated',
             created_at: new Date().toISOString(),
           }
-
           await blink.db.messages.create({
-            id: aiMsg.id,
-            conversation_id: convId,
-            role: 'assistant',
-            content: aiMsg.content,
-            model_used: selectedModel.id,
-            file_url: imageUrl,
-            file_name: 'صورة مولّدة',
-            file_type: 'image/generated',
+            id: aiMsg.id, conversation_id: convId, role: 'assistant',
+            content: aiMsg.content, model_used: selectedModel.id,
+            file_url: imageUrl, file_name: 'صورة مولّدة', file_type: 'image/generated',
           })
-
-          await blink.db.conversations.update(convId, {
-            updated_at: new Date().toISOString(),
-          })
-
+          await blink.db.conversations.update(convId, { updated_at: new Date().toISOString() })
           addMessage(aiMsg)
-        } catch (err) {
-          console.error('Image generation error:', err)
-          setError('عذراً، ما قدرت أولّد الصورة هسة. حاول مرة ثانية.')
+        } catch {
+          setError('عذراً، ما قدرت أولّد الصورة. حاول مرة ثانية.')
         } finally {
           setLoading(false)
           scrollToBottom()
@@ -217,16 +190,14 @@ export default function ChatScreen() {
       }
 
       try {
-        let fileContext: string | undefined = undefined
+        let fileContext: string | undefined
         if (fileUrl && fileName) {
-          fileContext = `[ملف مرفوع: ${fileName}]\nرابط الملف: ${fileUrl}\nالنوع: ${fileType || 'غير معروف'}`
+          fileContext = `[ملف مرفوع: ${fileName}]\nرابط: ${fileUrl}\nالنوع: ${fileType || 'غير معروف'}`
         }
 
-        await generateStreamingResponse(
-          messages,
-          text,
-          selectedModel.id,
-          religiousReferenceId,
+        // استدعاء generateStreamingResponse وهو يختار النموذج تلقائياً إذا auto
+        const { usedModelId, autoReason } = await generateStreamingResponse(
+          messages, text, selectedModel.id, religiousReferenceId,
           (chunk) => appendStreamingChunk(chunk),
           fileContext
         )
@@ -238,26 +209,19 @@ export default function ChatScreen() {
           conversation_id: convId,
           role: 'assistant',
           content: finalContent,
-          model_used: selectedModel.id,
+          model_used: usedModelId,
           created_at: new Date().toISOString(),
         }
 
         await blink.db.messages.create({
-          id: aiMsg.id,
-          conversation_id: convId,
-          role: 'assistant',
-          content: finalContent,
-          model_used: selectedModel.id,
+          id: aiMsg.id, conversation_id: convId, role: 'assistant',
+          content: finalContent, model_used: usedModelId,
         })
-
-        await blink.db.conversations.update(convId, {
-          updated_at: new Date().toISOString(),
-        })
+        await blink.db.conversations.update(convId, { updated_at: new Date().toISOString() })
 
         addMessage(aiMsg)
         useChatStore.getState().streamingContent = ''
       } catch (err: unknown) {
-        console.error('AI generation error:', err)
         const errorMessage = err instanceof Error ? err.message : 'عذراً، صار خطأ. حاول مرة ثانية.'
         setError(errorMessage)
       } finally {
@@ -265,26 +229,15 @@ export default function ChatScreen() {
         scrollToBottom()
       }
     },
-    [
-      activeConversationId,
-      messages,
-      selectedModel,
-      religiousReferenceId,
-      addMessage,
-      appendStreamingChunk,
-      setLoading,
-      setError,
-      setActiveConversation,
-      refetchConversations,
-      scrollToBottom,
-    ]
+    [activeConversationId, messages, selectedModel, religiousReferenceId,
+     addMessage, appendStreamingChunk, setLoading, setError,
+     setActiveConversation, refetchConversations, scrollToBottom]
   )
 
   const keyExtractor = useCallback((item: Message) => item.id, [])
   const renderMessage = useCallback(
     ({ item, index }: { item: Message; index: number }) => {
-      const isLastAssistant =
-        index === messages.length - 1 && item.role === 'assistant' && isLoading
+      const isLastAssistant = index === messages.length - 1 && item.role === 'assistant' && isLoading
       return (
         <ChatMessage
           message={item}
@@ -297,172 +250,283 @@ export default function ChatScreen() {
   )
 
   return (
-    <YStack flex={1} backgroundColor="#0A0A1A">
+    <View style={styles.root}>
+      {/* Background gradient */}
       <LinearGradient
-        colors={['#0F0F2D', '#1A1040', '#0F0F2D']}
+        colors={['#07071a', '#0e0b2e', '#07071a']}
         locations={[0, 0.5, 1]}
-        style={{
-          position: 'absolute',
-          top: 0,
-          left: 0,
-          right: 0,
-          bottom: 0,
-        }}
+        style={StyleSheet.absoluteFillObject}
       />
+
+      {/* Ambient orbs */}
+      <View style={[styles.orb, styles.orb1]} />
+      <View style={[styles.orb, styles.orb2]} />
+      <View style={[styles.orb, styles.orb3]} />
 
       <KeyboardAvoidingView
         behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
-        style={{ flex: 1 }}
-        keyboardVerticalOffset={Platform.OS === 'ios' ? 0 : 0}
+        style={styles.kav}
+        keyboardVerticalOffset={0}
       >
-        <YStack flex={1}>
-          {/* Header */}
-          <XStack
-            paddingHorizontal="$3"
-            paddingTop="$4"
-            paddingBottom="$2"
-            backgroundColor="rgba(15, 23, 42, 0.7)"
-            borderBottomWidth={1}
-            borderBottomColor="rgba(255, 255, 255, 0.06)"
-            alignItems="center"
-            justifyContent="space-between"
-          >
-            <XStack gap="$2" alignItems="center">
-              <ConversationList onNewChat={handleNewChat} />
-              <ModelSelector />
-            </XStack>
-
-            <XStack gap="$2" alignItems="center">
-              <Button
-                variant="ghost"
-                size="sm"
-                onPress={() => router.push('/settings')}
-                backgroundColor="rgba(255, 255, 255, 0.04)"
-                borderWidth={1}
-                borderColor="rgba(255, 255, 255, 0.08)"
-                borderRadius="$full"
-                width={36}
-                height={36}
-                alignItems="center"
-                justifyContent="center"
-              >
-                <Text color="$color11" fontSize={16}>⚙</Text>
-              </Button>
-              <Text
-                color="$color11"
-                fontSize={18}
-                fontWeight="800"
-                textAlign="right"
-              >
-                عبوسي
-              </Text>
-            </XStack>
-          </XStack>
-
-          {/* Error banner */}
-          {error && (
-            <XStack
-              backgroundColor="rgba(239, 68, 68, 0.15)"
-              borderBottomWidth={1}
-              borderBottomColor="rgba(239, 68, 68, 0.3)"
-              paddingHorizontal="$4"
-              paddingVertical="$3"
-              alignItems="center"
-              justifyContent="space-between"
-            >
-              <Text color="$red10" fontSize={14} style={{ flex: 1 }} textAlign="right">
-                {error}
-              </Text>
-              <Button
-                variant="ghost"
-                size="sm"
-                onPress={() => setError(null)}
-                paddingHorizontal="$2"
-              >
-                <Text color="$red9">✕</Text>
-              </Button>
-            </XStack>
+        {/* ─── Header ─── */}
+        <View style={styles.header}>
+          {Platform.OS !== 'web' && (
+            <BlurView intensity={25} tint="dark" style={StyleSheet.absoluteFillObject} />
           )}
+          <View style={styles.headerLeft}>
+            <ConversationList onNewChat={handleNewChat} />
+            <ModelSelector />
+          </View>
+          <View style={styles.headerRight}>
+            <TouchableOpacity
+              style={styles.settingsBtn}
+              onPress={() => router.push('/settings')}
+            >
+              <Text style={styles.settingsBtnIcon}>⚙</Text>
+            </TouchableOpacity>
+            <View style={styles.logoWrap}>
+              <Text style={styles.logoText}>عبوسي</Text>
+              <View style={styles.logoDot} />
+            </View>
+          </View>
+        </View>
 
-          {/* Messages */}
-          <YStack flex={1}>
-            {!activeConversationId && messages.length === 0 ? (
-              <YStack
-                flex={1}
-                alignItems="center"
-                justifyContent="center"
-                padding="$8"
-                gap="$4"
-              >
-                <YStack
-                  width={88}
-                  height={88}
-                  borderRadius="$full"
-                  backgroundColor="rgba(139, 92, 246, 0.1)"
-                  borderWidth={2}
-                  borderColor="rgba(139, 92, 246, 0.3)"
-                  alignItems="center"
-                  justifyContent="center"
-                  marginBottom="$2"
-                >
-                  <Text fontSize={40}>🤖</Text>
-                </YStack>
-                <Text color="$color12" fontSize={22} fontWeight="700" textAlign="center">
-                  أهلاً بيك في عبوسي
-                </Text>
-                <Text color="$color10" fontSize={15} textAlign="center" lineHeight={24}>
-                  مساعدك الذكي باللهجة العراقية{'\n'}
-                  اسأل أي شي، نظم شعر، اسأل دينياً، ارفع ملفات
-                </Text>
-                <Button
-                  variant="primary"
-                  size="md"
-                  onPress={handleNewChat}
-                  backgroundColor="$color9"
-                  borderRadius="$full"
-                  paddingHorizontal="$6"
-                  marginTop="$2"
-                >
-                  <Text color="$color1" fontSize={15} fontWeight="600">
-                    ابدأ المحادثة
-                  </Text>
-                </Button>
-              </YStack>
-            ) : (
-              <FlatList
-                ref={flatListRef}
-                data={messages}
-                keyExtractor={keyExtractor}
-                renderItem={renderMessage}
-                contentContainerStyle={{
-                  paddingVertical: 12,
-                  paddingBottom: 16,
-                }}
-                showsVerticalScrollIndicator={false}
-                onContentSizeChange={scrollToBottom}
-                onLayout={scrollToBottom}
-                ListEmptyComponent={
-                  <YStack
-                    flex={1}
-                    alignItems="center"
-                    justifyContent="center"
-                    padding="$8"
-                    gap="$3"
-                  >
-                    <Text fontSize={36}>💬</Text>
-                    <Text color="$color10" fontSize={15} textAlign="center">
-                      ابدأ بكتابة رسالتك الأولى
-                    </Text>
-                  </YStack>
-                }
-              />
-            )}
-          </YStack>
+        {/* ─── Error ─── */}
+        {error && (
+          <View style={styles.errorBanner}>
+            <Text style={styles.errorText}>{error}</Text>
+            <TouchableOpacity onPress={() => setError(null)} style={styles.errorClose}>
+              <Text style={styles.errorCloseText}>✕</Text>
+            </TouchableOpacity>
+          </View>
+        )}
 
-          {/* Input */}
-          <ChatInput onSend={handleSend} disabled={isLoading} />
-        </YStack>
+        {/* ─── Messages ─── */}
+        <View style={styles.messagesArea}>
+          {!activeConversationId && messages.length === 0 ? (
+            <View style={styles.welcome}>
+              {/* Glowing avatar */}
+              <View style={styles.welcomeAvatar}>
+                <View style={styles.welcomeAvatarGlow} />
+                <Text style={styles.welcomeAvatarIcon}>✦</Text>
+              </View>
+              <Text style={styles.welcomeTitle}>أهلاً بيك في عبوسي</Text>
+              <Text style={styles.welcomeSubtitle}>
+                مساعدك الذكي باللهجة العراقية{'\n'}
+                اسأل أي شي، نظم شعر، اسأل دينياً، أو ارفع ملفات
+              </Text>
+              <View style={styles.welcomeFeatures}>
+                {['🧠 ذكاء اصطناعي', '🎨 توليد صور', '📖 شعر عراقي', '🕌 مرجعية دينية'].map((f) => (
+                  <View key={f} style={styles.featureChip}>
+                    <Text style={styles.featureChipText}>{f}</Text>
+                  </View>
+                ))}
+              </View>
+              <TouchableOpacity style={styles.startBtn} onPress={handleNewChat}>
+                <LinearGradient
+                  colors={['#7c3aed', '#4f46e5']}
+                  start={{ x: 0, y: 0 }} end={{ x: 1, y: 0 }}
+                  style={styles.startBtnGradient}
+                >
+                  <Text style={styles.startBtnText}>ابدأ المحادثة</Text>
+                </LinearGradient>
+              </TouchableOpacity>
+            </View>
+          ) : (
+            <FlatList
+              ref={flatListRef}
+              data={messages}
+              keyExtractor={keyExtractor}
+              renderItem={renderMessage}
+              contentContainerStyle={styles.messagesList}
+              showsVerticalScrollIndicator={false}
+              onContentSizeChange={scrollToBottom}
+              onLayout={scrollToBottom}
+              ListEmptyComponent={
+                <View style={styles.emptyChat}>
+                  <Text style={styles.emptyChatIcon}>💬</Text>
+                  <Text style={styles.emptyChatText}>ابدأ بكتابة رسالتك الأولى</Text>
+                </View>
+              }
+            />
+          )}
+        </View>
+
+        {/* ─── Input ─── */}
+        <ChatInput onSend={handleSend} disabled={isLoading} />
       </KeyboardAvoidingView>
-    </YStack>
+    </View>
   )
 }
+
+const styles = StyleSheet.create({
+  root: { flex: 1, backgroundColor: '#07071a' },
+  kav: { flex: 1 },
+
+  // Ambient orbs
+  orb: {
+    position: 'absolute',
+    borderRadius: 999,
+    opacity: 0.18,
+  },
+  orb1: {
+    width: 320,
+    height: 320,
+    backgroundColor: '#6d28d9',
+    top: -80,
+    right: -80,
+  },
+  orb2: {
+    width: 260,
+    height: 260,
+    backgroundColor: '#1e40af',
+    bottom: 120,
+    left: -80,
+  },
+  orb3: {
+    width: 180,
+    height: 180,
+    backgroundColor: '#0e7490',
+    top: '40%',
+    right: -40,
+    opacity: 0.1,
+  },
+
+  // Header
+  header: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingHorizontal: 14,
+    paddingTop: Platform.OS === 'ios' ? 54 : (StatusBar.currentHeight ?? 0) + 10,
+    paddingBottom: 10,
+    borderBottomWidth: 1,
+    borderBottomColor: 'rgba(255,255,255,0.07)',
+    backgroundColor: Platform.OS === 'web' ? 'rgba(7,7,26,0.9)' : 'transparent',
+    overflow: 'hidden',
+  },
+  headerLeft: { flexDirection: 'row', alignItems: 'center', gap: 8 },
+  headerRight: { flexDirection: 'row', alignItems: 'center', gap: 10 },
+
+  settingsBtn: {
+    width: 34,
+    height: 34,
+    borderRadius: 17,
+    backgroundColor: 'rgba(255,255,255,0.06)',
+    borderWidth: 1,
+    borderColor: 'rgba(255,255,255,0.09)',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  settingsBtnIcon: { color: '#94a3b8', fontSize: 15 },
+
+  logoWrap: { flexDirection: 'row', alignItems: 'center', gap: 6 },
+  logoText: {
+    color: '#e2e8f0',
+    fontSize: 19,
+    fontWeight: '800',
+    letterSpacing: -0.5,
+  },
+  logoDot: {
+    width: 6,
+    height: 6,
+    borderRadius: 3,
+    backgroundColor: '#a78bfa',
+    marginTop: 2,
+  },
+
+  // Error
+  errorBanner: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: 'rgba(239,68,68,0.12)',
+    borderBottomWidth: 1,
+    borderBottomColor: 'rgba(239,68,68,0.25)',
+    paddingHorizontal: 16,
+    paddingVertical: 10,
+    gap: 8,
+  },
+  errorText: { color: '#fca5a5', fontSize: 13, flex: 1, textAlign: 'right' },
+  errorClose: { padding: 4 },
+  errorCloseText: { color: '#f87171', fontSize: 14 },
+
+  // Messages
+  messagesArea: { flex: 1 },
+  messagesList: { paddingVertical: 12, paddingBottom: 20 },
+  emptyChat: { alignItems: 'center', paddingTop: 60, gap: 10 },
+  emptyChatIcon: { fontSize: 32 },
+  emptyChatText: { color: '#475569', fontSize: 15 },
+
+  // Welcome screen
+  welcome: {
+    flex: 1,
+    alignItems: 'center',
+    justifyContent: 'center',
+    padding: 32,
+    gap: 18,
+  },
+  welcomeAvatar: {
+    width: 96,
+    height: 96,
+    borderRadius: 48,
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: 'rgba(109,40,217,0.15)',
+    borderWidth: 1.5,
+    borderColor: 'rgba(167,139,250,0.35)',
+    marginBottom: 6,
+  },
+  welcomeAvatarGlow: {
+    position: 'absolute',
+    width: 120,
+    height: 120,
+    borderRadius: 60,
+    backgroundColor: 'rgba(109,40,217,0.2)',
+  },
+  welcomeAvatarIcon: { color: '#a78bfa', fontSize: 38 },
+  welcomeTitle: {
+    color: '#f1f5f9',
+    fontSize: 26,
+    fontWeight: '800',
+    textAlign: 'center',
+    letterSpacing: -0.5,
+  },
+  welcomeSubtitle: {
+    color: '#64748b',
+    fontSize: 15,
+    textAlign: 'center',
+    lineHeight: 24,
+  },
+  welcomeFeatures: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 8,
+    justifyContent: 'center',
+    marginTop: 4,
+  },
+  featureChip: {
+    backgroundColor: 'rgba(255,255,255,0.06)',
+    borderRadius: 10,
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderWidth: 1,
+    borderColor: 'rgba(255,255,255,0.09)',
+  },
+  featureChipText: { color: '#94a3b8', fontSize: 13 },
+
+  startBtn: {
+    borderRadius: 24,
+    overflow: 'hidden',
+    marginTop: 8,
+    shadowColor: '#7c3aed',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.5,
+    shadowRadius: 16,
+    elevation: 8,
+  },
+  startBtnGradient: {
+    paddingHorizontal: 36,
+    paddingVertical: 14,
+  },
+  startBtnText: { color: '#fff', fontSize: 16, fontWeight: '700' },
+})

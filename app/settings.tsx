@@ -1,13 +1,6 @@
-import { useState } from 'react'
-import { Platform } from 'react-native'
-import {
-  YStack,
-  XStack,
-  Text,
-  Button,
-  ScrollView,
-} from '@blinkdotnew/mobile-ui'
+import { Platform, View, Text, TouchableOpacity, ScrollView, StyleSheet, StatusBar } from 'react-native'
 import { LinearGradient } from 'expo-linear-gradient'
+import { BlurView } from 'expo-blur'
 import { useRouter } from 'expo-router'
 import { useChatStore } from '@/stores/chatStore'
 import { AVAILABLE_MODELS, RELIGIOUS_REFERENCES, type ChatModel } from '@/types'
@@ -22,206 +15,246 @@ export default function SettingsScreen() {
   const setActiveConversation = useChatStore((s) => s.setActiveConversation)
   const setError = useChatStore((s) => s.setError)
 
-  const handleClearChat = () => {
-    setMessages([])
-    setActiveConversation(null)
-    setError(null)
-  }
-
   return (
-    <YStack flex={1} backgroundColor="#0A0A1A">
+    <View style={styles.root}>
       <LinearGradient
-        colors={['#0F0F2D', '#1A1040', '#0F0F2D']}
+        colors={['#07071a', '#0e0b2e', '#07071a']}
         locations={[0, 0.5, 1]}
-        style={{
-          position: 'absolute',
-          top: 0,
-          left: 0,
-          right: 0,
-          bottom: 0,
-        }}
+        style={StyleSheet.absoluteFillObject}
       />
+      <View style={[styles.orb, styles.orb1]} />
+      <View style={[styles.orb, styles.orb2]} />
 
-      <ScrollView flex={1} showsVerticalScrollIndicator={false}>
-        <YStack padding="$4" gap="$5">
-          {/* Header */}
-          <XStack
-            alignItems="center"
-            justifyContent="space-between"
-            paddingVertical="$2"
-          >
-            <Text color="$color12" fontSize={22} fontWeight="800" textAlign="right">
-              الإعدادات
-            </Text>
-            <Button
-              variant="ghost"
-              size="sm"
-              onPress={() => router.back()}
-              backgroundColor="rgba(255, 255, 255, 0.04)"
-              borderWidth={1}
-              borderColor="rgba(255, 255, 255, 0.08)"
-              borderRadius="$full"
-              width={36}
-              height={36}
-              alignItems="center"
-              justifyContent="center"
-            >
-              <Text color="$color11" fontSize={16}>✕</Text>
-            </Button>
-          </XStack>
+      {/* Header */}
+      <View style={styles.header}>
+        {Platform.OS !== 'web' && (
+          <BlurView intensity={25} tint="dark" style={StyleSheet.absoluteFillObject} />
+        )}
+        <Text style={styles.headerTitle}>الإعدادات</Text>
+        <TouchableOpacity style={styles.backBtn} onPress={() => router.back()}>
+          <Text style={styles.backBtnText}>✕</Text>
+        </TouchableOpacity>
+      </View>
 
-          {/* Model Selection */}
-          <YStack
-            backgroundColor="rgba(255, 255, 255, 0.04)"
-            borderRadius="$5"
-            borderWidth={1}
-            borderColor="rgba(255, 255, 255, 0.06)"
-            padding="$4"
-            gap="$3"
-          >
-            <Text color="$color12" fontSize={17} fontWeight="700" textAlign="right">
-              النموذج الافتراضي
-            </Text>
-            <Text color="$color10" fontSize={13} textAlign="right">
-              اختر النموذج المستخدم للإجابة على أسئلتك
-            </Text>
+      <ScrollView style={styles.scroll} showsVerticalScrollIndicator={false}>
+        <View style={styles.content}>
 
-            <YStack gap="$1">
-              {AVAILABLE_MODELS.map((model) => (
-                <XStack
+          {/* Model Section */}
+          <View style={styles.section}>
+            {Platform.OS !== 'web' && (
+              <BlurView intensity={15} tint="dark" style={StyleSheet.absoluteFillObject} />
+            )}
+            <View style={styles.sectionHeader}>
+              <Text style={styles.sectionIcon}>🤖</Text>
+              <View>
+                <Text style={styles.sectionTitle}>النموذج الافتراضي</Text>
+                <Text style={styles.sectionSub}>اختر نموذج الذكاء الاصطناعي</Text>
+              </View>
+            </View>
+
+            {AVAILABLE_MODELS.map((model) => {
+              const isSelected = selectedModel.id === model.id
+              return (
+                <TouchableOpacity
                   key={model.id}
+                  style={[styles.optionRow, isSelected && { borderColor: model.color + '50', backgroundColor: model.color + '12' }]}
                   onPress={() => setSelectedModel(model)}
-                  backgroundColor={
-                    selectedModel.id === model.id
-                      ? 'rgba(139, 92, 246, 0.15)'
-                      : 'transparent'
-                  }
-                  borderWidth={1}
-                  borderColor={
-                    selectedModel.id === model.id
-                      ? 'rgba(139, 92, 246, 0.3)'
-                      : 'rgba(255, 255, 255, 0.04)'
-                  }
-                  borderRadius="$4"
-                  paddingHorizontal="$4"
-                  paddingVertical="$3"
-                  gap="$3"
-                  alignItems="center"
-                  cursor="pointer"
                 >
-                  <YStack width={36} height={36} borderRadius="$3" backgroundColor="rgba(139, 92, 246, 0.12)" alignItems="center" justifyContent="center">
-                    <Text color="$color11" fontSize={16} fontWeight="700">{model.provider.charAt(0)}</Text>
-                  </YStack>
-                  <YStack flex={1}>
-                    <Text color="$color12" fontSize={15} fontWeight="600" textAlign="right">{model.name}</Text>
-                    <Text color="$color10" fontSize={12} textAlign="right">{model.provider} · {model.description}</Text>
-                  </YStack>
-                  {selectedModel.id === model.id && (
-                    <Text color="$color9" fontSize={14}>●</Text>
+                  <View style={[styles.modelBadge, { borderColor: model.color + '50', backgroundColor: model.color + '18' }]}>
+                    <Text style={[styles.modelBadgeText, { color: model.color }]}>{model.icon}</Text>
+                  </View>
+                  <View style={styles.optionInfo}>
+                    <View style={styles.optionNameRow}>
+                      <Text style={styles.optionName}>{model.name}</Text>
+                      {model.id === 'auto' && (
+                        <View style={styles.badge}>
+                          <Text style={styles.badgeText}>ذكي</Text>
+                        </View>
+                      )}
+                    </View>
+                    <Text style={styles.optionDesc}>{model.provider} · {model.description}</Text>
+                  </View>
+                  {isSelected && (
+                    <View style={[styles.checkCircle, { borderColor: model.color, backgroundColor: model.color + '25' }]}>
+                      <Text style={[styles.checkIcon, { color: model.color }]}>✓</Text>
+                    </View>
                   )}
-                </XStack>
-              ))}
-            </YStack>
-          </YStack>
+                </TouchableOpacity>
+              )
+            })}
+          </View>
 
-          {/* Religious Reference */}
-          <YStack
-            backgroundColor="rgba(255, 255, 255, 0.04)"
-            borderRadius="$5"
-            borderWidth={1}
-            borderColor="rgba(255, 255, 255, 0.06)"
-            padding="$4"
-            gap="$3"
-          >
-            <Text color="$color12" fontSize={17} fontWeight="700" textAlign="right">
-              المرجعية الدينية
-            </Text>
-            <Text color="$color10" fontSize={13} textAlign="right">
-              اختر المرجعية المعتمدة للإجابة على الأسئلة الدينية
-            </Text>
+          {/* Religious Section */}
+          <View style={styles.section}>
+            {Platform.OS !== 'web' && (
+              <BlurView intensity={15} tint="dark" style={StyleSheet.absoluteFillObject} />
+            )}
+            <View style={styles.sectionHeader}>
+              <Text style={styles.sectionIcon}>🕌</Text>
+              <View>
+                <Text style={styles.sectionTitle}>المرجعية الدينية</Text>
+                <Text style={styles.sectionSub}>للإجابة على الأسئلة الدينية</Text>
+              </View>
+            </View>
 
-            <YStack gap="$1">
-              {RELIGIOUS_REFERENCES.map((ref) => (
-                <XStack
+            {RELIGIOUS_REFERENCES.map((ref) => {
+              const isSelected = religiousReferenceId === ref.id
+              return (
+                <TouchableOpacity
                   key={ref.id}
+                  style={[styles.optionRow, isSelected && styles.optionRowSelected]}
                   onPress={() => setReligiousReferenceId(ref.id)}
-                  backgroundColor={
-                    religiousReferenceId === ref.id
-                      ? 'rgba(139, 92, 246, 0.15)'
-                      : 'transparent'
-                  }
-                  borderWidth={1}
-                  borderColor={
-                    religiousReferenceId === ref.id
-                      ? 'rgba(139, 92, 246, 0.3)'
-                      : 'rgba(255, 255, 255, 0.04)'
-                  }
-                  borderRadius="$4"
-                  paddingHorizontal="$4"
-                  paddingVertical="$3"
-                  alignItems="center"
-                  justifyContent="space-between"
-                  cursor="pointer"
                 >
-                  <Text
-                    color="$color12"
-                    fontSize={15}
-                    textAlign="right"
-                    style={{ flex: 1 }}
-                    numberOfLines={2}
-                  >
-                    {ref.name}
-                  </Text>
-                  {religiousReferenceId === ref.id && (
-                    <Text color="$color9" fontSize={14}>●</Text>
+                  <View style={styles.optionInfo}>
+                    <Text style={styles.optionName}>{ref.name}</Text>
+                  </View>
+                  {isSelected && (
+                    <View style={styles.checkCircle}>
+                      <Text style={styles.checkIcon}>✓</Text>
+                    </View>
                   )}
-                </XStack>
-              ))}
-            </YStack>
-          </YStack>
+                </TouchableOpacity>
+              )
+            })}
+          </View>
 
-          {/* App Info */}
-          <YStack
-            backgroundColor="rgba(255, 255, 255, 0.04)"
-            borderRadius="$5"
-            borderWidth={1}
-            borderColor="rgba(255, 255, 255, 0.06)"
-            padding="$4"
-            gap="$3"
-          >
-            <Text color="$color12" fontSize={17} fontWeight="700" textAlign="right">
-              حول التطبيق
-            </Text>
+          {/* About & danger */}
+          <View style={styles.section}>
+            {Platform.OS !== 'web' && (
+              <BlurView intensity={15} tint="dark" style={StyleSheet.absoluteFillObject} />
+            )}
+            <View style={styles.sectionHeader}>
+              <Text style={styles.sectionIcon}>ℹ️</Text>
+              <Text style={styles.sectionTitle}>حول التطبيق</Text>
+            </View>
+            <View style={styles.infoRow}>
+              <Text style={styles.infoLabel}>الإصدار</Text>
+              <Text style={styles.infoValue}>1.0.0</Text>
+            </View>
+            <View style={styles.infoRow}>
+              <Text style={styles.infoLabel}>المطور</Text>
+              <Text style={styles.infoValue}>عبوسي AI</Text>
+            </View>
 
-            <YStack gap="$2">
-              <XStack justifyContent="space-between" alignItems="center">
-                <Text color="$color9" fontSize={14}>الإصدار</Text>
-                <Text color="$color11" fontSize={14}>1.0.0</Text>
-              </XStack>
-              <XStack justifyContent="space-between" alignItems="center">
-                <Text color="$color9" fontSize={14}>المطور</Text>
-                <Text color="$color11" fontSize={14}>عبوسي</Text>
-              </XStack>
-            </YStack>
-
-            <Button
-              variant="outline"
-              size="md"
-              onPress={handleClearChat}
-              borderColor="rgba(239, 68, 68, 0.3)"
-              backgroundColor="rgba(239, 68, 68, 0.05)"
-              borderRadius="$4"
-              marginTop="$2"
+            <TouchableOpacity
+              style={styles.dangerBtn}
+              onPress={() => {
+                setMessages([])
+                setActiveConversation(null)
+                setError(null)
+                router.back()
+              }}
             >
-              <Text color="$red10" fontSize={15} fontWeight="600">
-                مسح المحادثة الحالية
-              </Text>
-            </Button>
-          </YStack>
+              <Text style={styles.dangerBtnText}>🗑 مسح المحادثة الحالية</Text>
+            </TouchableOpacity>
+          </View>
 
-          <YStack paddingVertical="$4" />
-        </YStack>
+          <View style={{ height: 40 }} />
+        </View>
       </ScrollView>
-    </YStack>
+    </View>
   )
 }
+
+const styles = StyleSheet.create({
+  root: { flex: 1, backgroundColor: '#07071a' },
+  orb: { position: 'absolute', borderRadius: 999 },
+  orb1: { width: 280, height: 280, backgroundColor: '#6d28d9', opacity: 0.15, top: -60, right: -60 },
+  orb2: { width: 220, height: 220, backgroundColor: '#1e40af', opacity: 0.12, bottom: 80, left: -50 },
+
+  header: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingHorizontal: 16,
+    paddingTop: Platform.OS === 'ios' ? 56 : (StatusBar.currentHeight ?? 0) + 12,
+    paddingBottom: 12,
+    borderBottomWidth: 1,
+    borderBottomColor: 'rgba(255,255,255,0.07)',
+    backgroundColor: Platform.OS === 'web' ? 'rgba(7,7,26,0.9)' : 'transparent',
+    overflow: 'hidden',
+  },
+  headerTitle: { color: '#f1f5f9', fontSize: 22, fontWeight: '800' },
+  backBtn: {
+    width: 34, height: 34, borderRadius: 17,
+    backgroundColor: 'rgba(255,255,255,0.07)',
+    borderWidth: 1, borderColor: 'rgba(255,255,255,0.1)',
+    alignItems: 'center', justifyContent: 'center',
+  },
+  backBtnText: { color: '#94a3b8', fontSize: 14 },
+
+  scroll: { flex: 1 },
+  content: { padding: 16, gap: 16 },
+
+  section: {
+    borderRadius: 20,
+    overflow: 'hidden',
+    borderWidth: 1,
+    borderColor: 'rgba(255,255,255,0.08)',
+    backgroundColor: Platform.OS === 'web' ? 'rgba(255,255,255,0.05)' : 'transparent',
+    padding: 16,
+    gap: 10,
+    marginBottom: 16,
+  },
+  sectionHeader: { flexDirection: 'row', alignItems: 'center', gap: 10, marginBottom: 6 },
+  sectionIcon: { fontSize: 22 },
+  sectionTitle: { color: '#f1f5f9', fontSize: 17, fontWeight: '700' },
+  sectionSub: { color: '#475569', fontSize: 12, marginTop: 2 },
+
+  optionRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
+    borderRadius: 14,
+    padding: 12,
+    borderWidth: 1,
+    borderColor: 'rgba(255,255,255,0.07)',
+    backgroundColor: 'rgba(255,255,255,0.03)',
+  },
+  optionRowSelected: {
+    borderColor: 'rgba(167,139,250,0.35)',
+    backgroundColor: 'rgba(139,92,246,0.1)',
+  },
+  modelBadge: {
+    width: 42, height: 42, borderRadius: 13,
+    borderWidth: 1, alignItems: 'center', justifyContent: 'center',
+  },
+  modelBadgeText: { fontSize: 17, fontWeight: '800' },
+  optionInfo: { flex: 1 },
+  optionNameRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'flex-end', gap: 6 },
+  optionName: { color: '#e2e8f0', fontSize: 14, fontWeight: '600', textAlign: 'right' },
+  optionDesc: { color: '#64748b', fontSize: 12, textAlign: 'right', marginTop: 2 },
+  badge: {
+    backgroundColor: 'rgba(167,139,250,0.2)', borderRadius: 6,
+    paddingHorizontal: 6, paddingVertical: 2,
+    borderWidth: 1, borderColor: 'rgba(167,139,250,0.3)',
+  },
+  badgeText: { color: '#c4b5fd', fontSize: 10, fontWeight: '600' },
+  checkCircle: {
+    width: 24, height: 24, borderRadius: 12,
+    borderWidth: 1.5, borderColor: 'rgba(167,139,250,0.5)',
+    backgroundColor: 'rgba(139,92,246,0.2)',
+    alignItems: 'center', justifyContent: 'center',
+  },
+  checkIcon: { color: '#a78bfa', fontSize: 12, fontWeight: '700' },
+
+  infoRow: {
+    flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center',
+    paddingVertical: 8,
+    borderBottomWidth: 1, borderBottomColor: 'rgba(255,255,255,0.05)',
+  },
+  infoLabel: { color: '#475569', fontSize: 14 },
+  infoValue: { color: '#94a3b8', fontSize: 14 },
+
+  dangerBtn: {
+    marginTop: 8,
+    borderRadius: 12,
+    paddingVertical: 12,
+    paddingHorizontal: 16,
+    backgroundColor: 'rgba(239,68,68,0.08)',
+    borderWidth: 1,
+    borderColor: 'rgba(239,68,68,0.25)',
+    alignItems: 'center',
+  },
+  dangerBtnText: { color: '#f87171', fontSize: 15, fontWeight: '600' },
+})
